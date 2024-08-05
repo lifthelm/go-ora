@@ -178,7 +178,8 @@ func (num *Number) decode() (strNum string, exp int, negative bool, err error) {
 	if negative && buf[len(buf)-1] == 0x66 {
 		buf = buf[:len(buf)-1]
 	}
-	var output []byte
+
+	output := make([]byte, 0, len(buf)*2)
 	for _, digit := range buf {
 		digit--
 		if negative {

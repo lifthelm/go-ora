@@ -12,12 +12,13 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/sijms/go-ora/v2/configurations"
 	"net"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sijms/go-ora/v2/configurations"
 
 	"github.com/sijms/go-ora/v2/trace"
 
@@ -1631,6 +1632,27 @@ func (session *Session) GetNullTermString(maxSize int) (result string, err error
 	return
 }
 
+var tempBufferPool = sync.Pool{
+	New: func() interface{} { return &bytes.Buffer{} },
+}
+
+const maxTempBufferSize = 4096
+
+func getTempBuffer() (b *bytes.Buffer) {
+	ipb := tempBufferPool.Get()
+	if ipb != nil {
+		b = ipb.(*bytes.Buffer)
+	}
+	return
+}
+
+func putTempBuffer(b *bytes.Buffer) {
+	if b.Len() <= maxTempBufferSize {
+		b.Reset()
+		tempBufferPool.Put(b)
+	}
+}
+
 // GetClr reed variable length bytearray from input buffer
 func (session *Session) GetClr() (output []byte, err error) {
 	var nb byte
@@ -1645,7 +1667,8 @@ func (session *Session) GetClr() (output []byte, err error) {
 	}
 	chunkSize := int(nb)
 	var chunk []byte
-	var tempBuffer bytes.Buffer
+	tempBuffer := getTempBuffer()
+
 	if chunkSize == 0xFE {
 		for chunkSize > 0 {
 			//if session.IsBreak() {
@@ -1674,6 +1697,7 @@ func (session *Session) GetClr() (output []byte, err error) {
 		tempBuffer.Write(chunk)
 	}
 	output = tempBuffer.Bytes()
+	putTempBuffer(tempBuffer)
 	return
 	//var size uint8
 	//var rb []byte
