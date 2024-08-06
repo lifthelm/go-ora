@@ -1636,7 +1636,7 @@ var tempBufferPool = sync.Pool{
 	New: func() interface{} { return &bytes.Buffer{} },
 }
 
-const maxTempBufferSize = 4096
+const maxTempBufferSize = 100
 
 func getTempBuffer() (b *bytes.Buffer) {
 	ipb := tempBufferPool.Get()
@@ -1650,6 +1650,27 @@ func putTempBuffer(b *bytes.Buffer) {
 	if b.Len() <= maxTempBufferSize {
 		b.Reset()
 		tempBufferPool.Put(b)
+	}
+}
+
+var tempBytesBufferPool = sync.Pool{
+	New: func() interface{} { return []byte{} },
+}
+
+const maxTempBytesBufferSize = 32
+
+func getTempBytesBuffer() (b []byte) {
+	ipb := tempBytesBufferPool.Get()
+	if ipb != nil {
+		b = ipb.([]byte)
+	}
+	return
+}
+
+func putTempBytesBuffer(b []byte) {
+	if cap(b) <= maxTempBytesBufferSize {
+		b = b[:0]
+		tempBytesBufferPool.Put(b)
 	}
 }
 
@@ -1667,7 +1688,9 @@ func (session *Session) GetClr() (output []byte, err error) {
 	}
 	chunkSize := int(nb)
 	var chunk []byte
-	tempBuffer := getTempBuffer()
+	// var tempBuffer bytes.Buffer
+	// tempBuffer := getTempBuffer()
+	tempBuffer := getTempBytesBuffer()
 
 	if chunkSize == 0xFE {
 		for chunkSize > 0 {
@@ -1687,17 +1710,23 @@ func (session *Session) GetClr() (output []byte, err error) {
 			if err != nil {
 				return
 			}
-			tempBuffer.Write(chunk)
+			// tempBuffer.Write(chunk)
+			tempBuffer = append(tempBuffer, chunk...)
 		}
 	} else {
 		chunk, err = session.GetBytes(chunkSize)
 		if err != nil {
 			return
 		}
-		tempBuffer.Write(chunk)
+		// tempBuffer.Write(chunk)
+		tempBuffer = append(tempBuffer, chunk...)
 	}
-	output = tempBuffer.Bytes()
-	putTempBuffer(tempBuffer)
+	// output = tempBuffer.Bytes()
+	output = make([]byte, len(tempBuffer))
+	copy(output, tempBuffer)
+	// fmt.Printf("LEN OF OUTPUT %d\n", len(output))
+	// putTempBuffer(tempBuffer)
+	// putTempBytesBuffer(tempBuffer)
 	return
 	//var size uint8
 	//var rb []byte
